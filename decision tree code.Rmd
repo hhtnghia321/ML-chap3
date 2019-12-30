@@ -1,0 +1,243 @@
+---
+title: "ML-Chap3"
+author: "Huynh Hoang Trung Nghia"
+date: "12/29/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+```
+
+# loading the data
+
+```{r}
+
+```
+
+# small function
+
+```{r}
+
+# calculating the gini index
+gini <- function(data_vect ){
+  #check whether the variables is vector
+  if( !is.vector(data_vect)){
+    errorCondition("The input not the vector")
+  }
+  #check discrete or not
+  if(Hmisc::is.discrete(var) | !is.numeric(var)){
+    #calculate gini 
+    data_vect <- as.factor(data_vect)
+    levels <- unique(data_vect)
+    for (i in 1:length(levels)) {
+      if(i == 1){
+        gini <- 1- (sum(data_vect == levels[i])/length(data_vect))^2
+      } else {
+        gini <- gini - (sum(data_vect == levels[i])/length(data_vect))^2
+      }
+    }
+    return(gini)
+  } else{
+    errorCondition("the variables not discrete")
+  }
+}
+#calculating information gain
+info_gain <- function(data_vect){
+  #check whether the variables is vector
+  if( !is.vector(data_vect)){
+    errorCondition("The input not the vector")
+  }
+  #check discrete or not
+  if(Hmisc::is.discrete(var) | !is.numeric(var)){
+    #calculate information gian
+  data_vect <- as.factor(data_vect)
+    levels <- unique(data_vect)
+    for (i in 1:length(levels)) {
+      p <- sum(data_vect == levels[i])/length(data_vect)
+      if(i == 1){
+        inf_g <- -p*log(p,2)
+      } else {
+        inf_g <- inf_g - p*log(p,2) 
+      }
+    }
+    return(inf_g)
+  } else {
+    errorCondition("the variables not discrete")
+  }
+}
+
+#condition will contain unique value and variables name, condition is the list
+
+test_condition <- function(data,condition){
+  var_name <- condition$name
+  output_set <- list()
+  #tree with discrete
+  if (Hmisc::is.discrete(var) | !is.numeric(var)){
+    for (i in 1:length(condition$value)) {
+      output_set[[i]] <- data[data[,var_name] == condition$value[i],]
+    }
+  } else {
+    #tree with continuous
+    output_set[[1]] <- data[data[,var_name] <= condition$value[1],]
+    output_set[[2]] <- data[data[,var_name] > condition$value[2],]
+  }
+}
+
+```
+
+# Core function
+
+```{r}
+#calculating node
+node <- function(data, label_var, method = "gini"){
+  #the data must have exactly three variables
+  name <-colnames(data)[colnames(data) != c(label_var,"index")]
+  var <- select(data, -c(label_var, "index"))[[1]]
+  if (ncol(data) != 3 ){
+    errorCondition("the node_data must only have 3 columns")
+  } else {
+    #check if the data discrete or continous
+    if(Hmisc::is.discrete(var) | !is.numeric(var)){
+        var <- as.factor(var)
+        var_levels <- unique(var)
+        #initial entropy vector
+        entropy_vec <- c()
+        #initial gini_vec
+        gini_vec <- c()
+        #initial outcome_list
+        outcome_list <- list()
+        #initial p vector
+        p <- c()
+        if(method == "gini"){
+        #loop through outcome with gini
+          for (i in 1:length(var_levels)) {
+            outcome <- data[var==var_levels[i],]
+            outcome_list[[i]] <- outcome
+            gini_outcome <- gini(outcome[,label_var])
+            gini_vec[i] <- gini_outcome
+          }
+          condition <- list("name" = name, "value" = var_levels)
+          gini_mean <- mean(gini_vec)
+          dum <- list(gini_mean, outcome_list, condition)
+          return(dum)
+        } else {
+          #loop through outcome with information gain
+          for (i in 1:length(var_levels)) {
+            outcome <- data[var==var_levels[i],]
+            outcome_list[[i]] <- outcome
+            entropy_outcome <- info_gain(outcome[,label_var])
+            entropy_vec[i] <- entropy_outcome
+            p[i] <- nrow(outcome)/nrow(data)
+          }
+          condition <- list("name" = name, "value" = var_levels)
+          #loop for gain_ratio
+          for (j in 1:length(entropy_vec)) {
+            if(j == 1){
+              info_ratio <- info_gain(data[,label_var]) - p[j]*entropy_vec[i]
+            } else {
+            info_ratio <- info_ratio - p[j]*entropy_vec[i]
+            }
+          }
+          dum <- list(info_ratio, outcome_list, condition)
+          return(dum)
+        }
+    } else{
+      
+      #with continuous data
+      
+      var_mean <- c()
+      #initial gain raito vector
+      gain_ratio_vec <- c()
+      #initial gini_mean_vec
+      gini_mean_vec <- c()
+      #initial outcome_list
+      outcome_list <- list()
+      #initial outcome_1_list
+      outcome_1_list <- list()
+      #initial p vector
+      p <- c()
+      #calculate if the variables not discrete
+      for(i in 1:(length(var)-1)){
+      var_mean[i] <- mean(var[i:i+1])
+      }
+      data$var_mean <- var_mean
+      #loop throught binary mean
+      for (j in 1:length(var_mean)) {
+        outcome <- data[data$var <= var_mean[i],]
+        outcome_1 <- data[data$var > var_mean[i],]
+        outcome_list[[i]] <- outcome
+        outcome_1_list[[i]] <- outcome_1
+        #calculating with gini
+        if(method == "gini"){
+          gini_outcome <- gini(outcome$label_var)
+          gini_outcome_1 <- gini(outcome_1$label_var)
+          gini_mean_vec[i] <- (gini_outcome + gini_outcome_1)/2
+        } else{
+          #calculating with entropy
+          entropy_outcome <- info_gain(outcome$label_var)
+          entropy_outcome_1 <- info_gain(outcome_1$label_var)
+          p[1] <- nrow(outcome)/nrow(data)
+          p[2] <- nrow(outcome_1)/nrow(data)
+          gain_ratio_vec[i] <- info_gain(data$label_var) - p[1]*entropy_outcome - p[2]*entropy_outcome_1
+        }
+      }
+      final_outcome <- list()
+      #return value with each method of continuous 
+      if(method == "gini"){
+        condition <- list("name" = name, "value" = var_mean[which.min(gini_mean_vec)])
+        final_outcome[[1]] <- outcome_list[[which.min(gini_mean_vec)]]
+        final_outcome[[2]] <- outcome_1_list[[which.min(gini_mean_vec)]]
+        dum <- list(final_outcome, gini_mean_vec, condition)
+        return(dum)
+      } else{
+        condition <- list("name" = name, "value" = var_mean[which.max(gain_ratio_vec)])
+        final_outcome[[1]] <- outcome_list[[which.max(gain_ratio_vec)]]
+        final_outcome[[2]] <- outcome_1_list[[which.max(gain_ratio_vec)]]
+        dum <- list(final_outcome, gain_ratio_vec, condition)
+        return(dum)
+      }
+    }
+  }
+}
+
+```
+
+# Decision Tree
+
+```{r}
+decision_tree <- function(data, label_var ,method = "gini"){
+  library(dplyr)
+  no_col <- ncol(data)
+  #adding index column for subseting
+  data$index <- 1:nrow(data)
+  #find the root with gini
+  if(method == "gini"){
+    #loop through variables
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+  }
+
+  
+  
+  
+}
+
+
+```
+
+
+
+
+
+
+
